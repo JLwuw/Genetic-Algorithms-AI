@@ -1,0 +1,7 @@
+Id,Abreviacion,Nombre,Profesores
+1,CS1,Introducción a la Computación,"1,2"
+2,IN1,Ingles Introductorio,"1,3"
+3,MA1,Geometría,"1,2"
+4,FIS1,Física Introductoria,"3,4"
+5,HIA,Historia del Arte,"4"
+6,DRA,Drama,"1,4"
