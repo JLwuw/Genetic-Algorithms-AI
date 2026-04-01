@@ -1,0 +1,27 @@
+group_id,subject,professor,classroom,day,hour
+1,CS1,Prof. García,Aula C,Jueves,11:00-13:00
+1,MA1,Prof. García,Aula A,Lunes,13:00-15:00
+1,FIS1,Prof. López,Aula A,Lunes,11:00-13:00
+2,IN1,Prof. García,Aula B,Martes,11:00-13:00
+2,MA1,Prof. Martínez,Aula B,Jueves,9:00-11:00
+2,HIA,Prof. Ramos,Aula B,Miércoles,13:00-15:00
+2,DRA,Prof. García,Aula B,Lunes,9:00-11:00
+3,MA1,Prof. García,Aula D,Martes,9:00-11:00
+3,FIS1,Prof. López,Aula B,Martes,13:00-15:00
+3,HIA,Prof. Ramos,Aula C,Viernes,13:00-15:00
+4,CS1,Prof. Martínez,Aula B,Viernes,11:00-13:00
+4,FIS1,Prof. López,Aula D,Miércoles,13:00-15:00
+5,IN1,Prof. López,Aula C,Miércoles,11:00-13:00
+5,MA1,Prof. García,Aula D,Viernes,11:00-13:00
+5,HIA,Prof. Ramos,Aula D,Jueves,11:00-13:00
+6,CS1,Prof. García,Aula B,Jueves,13:00-15:00
+6,FIS1,Prof. Ramos,Aula B,Miércoles,11:00-13:00
+6,HIA,Prof. Ramos,Aula D,Martes,13:00-15:00
+7,CS1,Prof. García,Aula D,Miércoles,9:00-11:00
+7,MA1,Prof. Martínez,Aula C,Lunes,13:00-15:00
+8,IN1,Prof. López,Aula C,Viernes,11:00-13:00
+8,DRA,Prof. Ramos,Aula D,Martes,11:00-13:00
+9,CS1,Prof. Martínez,Aula A,Lunes,9:00-11:00
+9,DRA,Prof. García,Aula B,Viernes,13:00-15:00
+10,MA1,Prof. Martínez,Aula D,Jueves,13:00-15:00
+10,FIS1,Prof. Ramos,Aula D,Lunes,13:00-15:00
