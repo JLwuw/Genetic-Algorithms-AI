@@ -7,7 +7,7 @@ from pathlib import Path
 def _build_data_file_path(path_to_data, file_name):
     return Path(path_to_data) / file_name
 
-def student_group_df(path_to_data, file_name):
+def get_student_groups_df(path_to_data, file_name):
     df = pd.read_csv(_build_data_file_path(path_to_data, file_name))
     df["Asignaturas"] = df["Asignaturas"].apply(lambda x: list(map(int, x.split(","))))
     return df
@@ -51,35 +51,38 @@ if __name__ == "__main__":
     classroom_df = get_classroom_df(path_to_data, "aulas.csv")
     professors_df = get_professors_df(path_to_data, "profesores.csv")
     time_slots_df = get_time_slots_df(path_to_data, "franjas_horarias.csv")    
-    student_group_df = student_group_df(path_to_data, "grupos_estudiantes.csv")
+    student_groups_df = get_student_groups_df(path_to_data, "grupos_estudiantes.csv")
 
     # Create lists of valid IDs for each entity to facilitate random selection during gene creation and mutation
-    valid_subjects = subjects_df["Id"].tolist()
     valid_classrooms = classroom_df["Id"].tolist()
     valid_professors = professors_df["Id"].tolist()
     valid_time_slots = time_slots_df["Id"].tolist()
 
-    # Precompute classroom capacities and group sizes for quick access during fitness evaluation
+    # Precompute classroom capacities, group sizes, and subject-professor mappings for quick access during fitness evaluation
     classroom_capacities = {row["Id"]: row["Capacidad"] for _, row in classroom_df.iterrows()}
-    group_sizes = {row["Id"]: row["Numero_de_Estudiantes"] for _, row in student_group_df.iterrows()}
-
-    def create_gene():
-        subject_id = random.choice(valid_subjects)
-        classroom_id = random.choice(valid_classrooms)
-        professor_id = random.choice(valid_professors)
-        time_slot_id = random.choice(valid_time_slots)
-        return (subject_id, classroom_id, professor_id, time_slot_id)
+    group_sizes = {row["Id"]: row["Numero_de_Estudiantes"] for _, row in student_groups_df.iterrows()}
+    subject_professors = {row["Id"]: row["Profesores"] for _, row in subjects_df.iterrows()}
 
     # Each student group has a list of subjects they MUST take.
     # We create a list of tuples (group_id, subject_id) for each group-subject combination that must exist in the schedule
     group_subject_assignments = []
-    for group_id, subjects in zip(student_group_df["Id"], student_group_df["Asignaturas"]):
+    for group_id, subjects in zip(student_groups_df["Id"], student_groups_df["Asignaturas"]):
         for subject_id in subjects:
             group_subject_assignments.append((group_id, subject_id))
+
+    def create_individual():
+        genes = []
+        for _, required_subject_id in group_subject_assignments:
+            classroom_id = random.choice(valid_classrooms)
+            professor_options = subject_professors.get(required_subject_id, valid_professors)
+            professor_id = random.choice(professor_options)
+            time_slot_id = random.choice(valid_time_slots)
+            genes.append((classroom_id, professor_id, time_slot_id))
+        return creator.Individual(genes)
     
     # To make sure every group takes all the subjects they must,
     # The ith gene of each individual will be associated to the ith element of the group_subject_assignments list
-    toolBox.register("individual", tools.initRepeat, creator.Individual, create_gene, n=len(group_subject_assignments))
+    toolBox.register("individual", create_individual)
     toolBox.register("population", tools.initRepeat, list, toolBox.individual)
 
 
@@ -87,16 +90,21 @@ if __name__ == "__main__":
     def evaluate(individual):
         penalty = 0
         professor_time_slots = {}
-        classroom_time_slots = {}     
+        classroom_time_slots = {}
+        group_time_slots = {}
 
         for i, class_assignment in enumerate(individual):
-            subject_id, classroom_id, professor_id, time_slot_id = class_assignment
+            classroom_id, professor_id, time_slot_id = class_assignment
+            group_id, required_subject_id = group_subject_assignments[i]
 
             if professor_time_slots.get(professor_id) is None:
                 professor_time_slots[professor_id] = set()
             
             if classroom_time_slots.get(classroom_id) is None:
                 classroom_time_slots[classroom_id] = set()
+
+            if group_time_slots.get(group_id) is None:
+                group_time_slots[group_id] = set()
 
             # Same professor teaching two classes in the same time slot
             if time_slot_id in professor_time_slots[professor_id]:
@@ -106,20 +114,26 @@ if __name__ == "__main__":
             if time_slot_id in classroom_time_slots[classroom_id]:
                 penalty += 1
 
+            # Same student group taking two classes in the same time slot
+            if time_slot_id in group_time_slots[group_id]:
+                penalty += 1
+
             professor_time_slots[professor_id].add(time_slot_id)
             classroom_time_slots[classroom_id].add(time_slot_id)
+            group_time_slots[group_id].add(time_slot_id)
 
-            # Check if the assigned subject matches the required subject for the student group
-            if group_subject_assignments[i][1] != subject_id:
+            # Check if the assigned professor is allowed to teach the subject
+            allowed_professors = subject_professors.get(required_subject_id, [])
+            if professor_id not in allowed_professors:
                 penalty += 1
 
             classroom_capacity = classroom_capacities.get(classroom_id, -1)
             if classroom_capacity == -1:
                 raise ValueError(f"Classroom ID {classroom_id} not found in classroom capacities.")
 
-            group_size = group_sizes.get(group_subject_assignments[i][0], -1)
+            group_size = group_sizes.get(group_id, -1)
             if group_size == -1:
-                raise ValueError(f"Group ID {group_subject_assignments[i][0]} not found in group sizes.")
+                raise ValueError(f"Group ID {group_id} not found in group sizes.")
 
             # Check if the assigned classroom can accommodate the student group
             if group_size > classroom_capacity:
@@ -131,21 +145,20 @@ if __name__ == "__main__":
     # Flip mutation: choose a random gene and change one of its components randomly
     def mutate(individual):
         i = random.randint(0, len(individual) - 1)
-        subject_id, classroom_id, professor_id, time_slot_id = individual[i]
+        classroom_id, professor_id, time_slot_id = individual[i]
+        _, required_subject_id = group_subject_assignments[i]
 
         # randomly decide what to mutate
-        choice = random.choice(["subject", "classroom", "time slot", "professor"])
+        choice = random.choice(["classroom", "time slot", "professor"])
 
-        if choice == "subject":
-            subject_id = random.choice(valid_subjects)
-        elif choice == "classroom":
+        if choice == "classroom":
             classroom_id = random.choice(valid_classrooms)
         elif choice == "time slot":
             time_slot_id = random.choice(valid_time_slots)
         else:
-            professor_id = random.choice(valid_professors)
+            professor_id = random.choice(subject_professors.get(required_subject_id, valid_professors))
 
-        individual[i] = (subject_id, classroom_id, professor_id, time_slot_id)
+        individual[i] = (classroom_id, professor_id, time_slot_id)
 
         return (individual,)
 
@@ -165,7 +178,7 @@ if __name__ == "__main__":
         offspring = toolBox.select(population, len(population))
         offspring = list(map(toolBox.clone, offspring))
 
-        for i in range(0, len(offspring), 2):
+        for i in range(0, len(offspring) - 1, 2):
             if random.random() < CROSSOVER_PROBABILITY:
                 toolBox.mate(offspring[i], offspring[i+1])
                 del offspring[i].fitness.values
@@ -190,9 +203,21 @@ if __name__ == "__main__":
             print(f"Generation {generation}: Best = {min(ind.fitness.values[0] for ind in population)}")
         
     
+    subject_names = {row["Id"]: row["Abreviacion"] for _, row in subjects_df.iterrows()}
+    classroom_names = {row["Id"]: row["Aula"] for _, row in classroom_df.iterrows()}
+    professor_names = {row["Id"]: row["Nombres"] for _, row in professors_df.iterrows()}
+    time_slot_details = {row["Id"]: (row["Dia"], row["Hora"]) for _, row in time_slots_df.iterrows()}
+
     best_individual = tools.selBest(population, 1)[0]
     print("Best Individual:")
     for i, class_assignment in enumerate(best_individual):
-        subject_id, classroom_id, professor_id, time_slot_id = class_assignment
-        group_id = group_subject_assignments[i][0]
-        print(f"Group {group_id} - Subject {subject_id} - Classroom {classroom_id} - Professor {professor_id} - Time Slot {time_slot_id}")
+        classroom_id, professor_id, time_slot_id = class_assignment
+        group_id, subject_id = group_subject_assignments[i]
+        subject_name = subject_names.get(subject_id, f"Unknown Subject {subject_id}")
+        classroom_name = classroom_names.get(classroom_id, f"Unknown Classroom {classroom_id}")
+        professor_name = professor_names.get(professor_id, f"Unknown Professor {professor_id}")
+        day, hour = time_slot_details.get(time_slot_id, (f"Unknown Day ({time_slot_id})", "Unknown Hour"))
+        print(
+            f"{subject_name} - {professor_name} - {group_id} - "
+            f"{classroom_name} - {day} - {hour}"
+        )
